@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Test</title>
+</head>
+<body>
+    <div id="app">Загрузка...</div>
+    
+    <script src="./dist/js-framework.iife.js"></script>
+    <script>
+        console.log('1. Script loaded');
+        console.log('2. Window object:', window);
+        console.log('3. JSFramework available:', window.JSFramework);
+        
+        if (window.JSFramework) {
+            console.log('4. JSFramework properties:', Object.keys(window.JSFramework));
+            
+            // Простой тест
+            try {
+                const { Framework } = window.JSFramework;
+                console.log('5. Framework object:', Framework);
+                
+                const config = {
+                    tag: 'div',
+                    children: ['Hello World!']
+                };
+                
+                console.log('6. Trying to render:', config);
+                const element = Framework.render(config, '#app');
+                console.log('7. Render successful:', element);
+                
+            } catch (error) {
+                console.error('8. Render error:', error);
+            }
+        } else {
+            console.error('4. JSFramework not found in window');
+        }
+    </script>
+</body>
+</html>

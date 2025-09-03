@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Простой тест</title>
+</head>
+<body>
+    <h1>Простой тест загрузки</h1>
+    <div id="app">Загружается...</div>
+    
+    <script src="./dist/js-framework.iife.js"></script>
+    <script>
+        console.log('Скрипт загружен');
+        console.log('window.JSFramework:', window.JSFramework);
+        
+        if (window.JSFramework && window.JSFramework.Framework) {
+            console.log('Framework найден, пробуем рендер...');
+            
+            try {
+                const config = {
+                    tag: 'div',
+                    props: {
+                        style: { color: 'blue', fontSize: '20px' }
+                    },
+                    children: ['Привет из JS Framework!']
+                };
+                
+                const rendered = window.JSFramework.Framework.render(config, '#app');
+                console.log('Успешно отрендерено:', rendered);
+                
+            } catch (error) {
+                console.error('Ошибка рендеринга:', error);
+                document.getElementById('app').innerHTML = 'Ошибка: ' + error.message;
+            }
+        } else {
+            console.error('JSFramework не найден');
+            document.getElementById('app').innerHTML = 'JSFramework не найден в window';
+        }
+    </script>
+</body>
+</html>

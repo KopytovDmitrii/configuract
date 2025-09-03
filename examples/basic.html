@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Framework - Базовый пример</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: white;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            min-height: 100vh;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px 0;
+            border-bottom: 2px solid #007bff;
+        }
+        
+        .header h1 {
+            color: #007bff;
+            margin: 0;
+        }
+        
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .card h3 {
+            margin-top: 0;
+            color: #333;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+            transition: background-color 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: #007bff;
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #0056b3;
+        }
+        
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+        
+        .btn-success:hover {
+            background: #1e7e34;
+        }
+        
+        .btn-warning {
+            background: #ffc107;
+            color: #212529;
+        }
+        
+        .btn-warning:hover {
+            background: #e0a800;
+        }
+        
+        .counter-display {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+            margin: 10px 0;
+        }
+        
+        .form-group {
+            margin-bottom: 15px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .form-group input,
+        .form-group textarea,
+        .form-group select {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        
+        .form-group input:focus,
+        .form-group textarea:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #007bff;
+            box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
+        }
+        
+        .todo-item {
+            padding: 10px;
+            border: 1px solid #ddd;
+            margin: 5px 0;
+            border-radius: 4px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .todo-item.completed {
+            text-decoration: line-through;
+            opacity: 0.6;
+        }
+        
+        .stats {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        
+        .stats h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .alert {
+            padding: 12px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        
+        .alert-success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        
+        .alert-info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+    </style>
+</head>
+<body>
+    <div id="app"></div>
+    
+    <script src="../dist/js-framework.iife.js"></script>
+    <script>
+        // Инициализация фреймворка
+        const { JSFramework, Framework } = window.JSFramework;
+        
+        // Состояние приложения
+        let appState = {
+            counter: 0,
+            todos: [],
+            username: '',
+            message: ''
+        };
+        
+        // Обработчики событий
+        function incrementCounter() {
+            appState.counter++;
+            showAlert('Счётчик увеличен!', 'success');
+            updateStats();
+        }
+        
+        function decrementCounter() {
+            appState.counter--;
+            showAlert('Счётчик уменьшен!', 'success');
+            updateStats();
+        }
+        
+        function resetCounter() {
+            appState.counter = 0;
+            showAlert('Счётчик сброшен!', 'info');
+            updateStats();
+        }
+        
+        function addTodo() {
+            const text = prompt('Введите текст задачи:');
+            if (text && text.trim()) {
+                appState.todos.push({
+                    id: Date.now(),
+                    text: text.trim(),
+                    completed: false
+                });
+                renderTodoList();
+                showAlert('Задача добавлена!', 'success');
+            }
+        }
+        
+        function toggleTodo(id) {
+            const todo = appState.todos.find(t => t.id === id);
+            if (todo) {
+                todo.completed = !todo.completed;
+                renderTodoList();
+            }
+        }
+        
+        function deleteTodo(id) {
+            appState.todos = appState.todos.filter(t => t.id !== id);
+            renderTodoList();
+            showAlert('Задача удалена!', 'info');
+        }
+        
+        function handleFormSubmit(event) {
+            event.preventDefault();
+            const formData = new FormData(event.target);
+            appState.username = formData.get('username') || '';
+            appState.message = formData.get('message') || '';
+            
+            showAlert(`Форма отправлена! Привет, ${appState.username}!`, 'success');
+            event.target.reset();
+        }
+        
+        function showAlert(message, type) {
+            const alertConfig = {
+                tag: 'div',
+                props: {
+                    class: `alert alert-${type}`,
+                    style: {
+                        position: 'fixed',
+                        top: '20px',
+                        right: '20px',
+                        zIndex: 1000,
+                        minWidth: '300px'
+                    }
+                },
+                children: [message]
+            };
+            
+            const renderer = new window.JSFramework.HTMLRenderer();
+            const alertElement = renderer.render(alertConfig, document.body);
+            
+            setTimeout(() => {
+                renderer.unmount(alertElement);
+            }, 3000);
+        }
+        
+        function updateStats() {
+            const statsElement = Framework.findById('stats-content');
+            if (statsElement) {
+                const stats = Framework.getStats();
+                statsElement.innerHTML = `
+                    <strong>Статистика фреймворка:</strong><br>
+                    Элементов создано: ${stats.elementsCreated}<br>
+                    События привязаны: ${stats.eventsAttached}<br>
+                    Время рендеринга: ${stats.renderTime.toFixed(2)}мс<br>
+                    <strong>Состояние приложения:</strong><br>
+                    Значение счётчика: ${appState.counter}<br>
+                    Всего задач: ${appState.todos.length}<br>
+                    Выполнено задач: ${appState.todos.filter(t => t.completed).length}
+                `;
+            }
+        }
+        
+        function renderTodoList() {
+            const todoContainer = Framework.findById('todo-list');
+            if (todoContainer) {
+                todoContainer.innerHTML = '';
+                
+                appState.todos.forEach(todo => {
+                    const todoConfig = {
+                        tag: 'div',
+                        props: { 
+                            class: `todo-item ${todo.completed ? 'completed' : ''}` 
+                        },
+                        children: [
+                            {
+                                tag: 'span',
+                                children: [todo.text]
+                            },
+                            {
+                                tag: 'div',
+                                children: [
+                                    {
+                                        tag: 'button',
+                                        props: { class: 'btn btn-success' },
+                                        events: { click: () => toggleTodo(todo.id) },
+                                        children: [todo.completed ? '↩️ Отменить' : '✅ Выполнено']
+                                    },
+                                    {
+                                        tag: 'button',
+                                        props: { class: 'btn btn-warning' },
+                                        events: { click: () => deleteTodo(todo.id) },
+                                        children: ['🗑️ Удалить']
+                                    }
+                                ]
+                            }
+                        ]
+                    };
+                    
+                    const renderer = new window.JSFramework.HTMLRenderer();
+                    const todoElement = renderer.render(todoConfig, todoContainer);
+                });
+            }
+        }
+        
+        // Конфигурация приложения
+        const appConfig = {
+            tag: 'div',
+            props: {
+                class: 'container'
+            },
+            children: [
+                // Заголовок
+                {
+                    tag: 'div',
+                    props: { class: 'header' },
+                    children: [
+                        {
+                            tag: 'h1',
+                            children: ['🚀 Добро пожаловать в JS Framework']
+                        },
+                        {
+                            tag: 'p',
+                            children: ['Демонстрация возможностей фреймворка']
+                        }
+                    ]
+                },
+                
+                // Счётчик
+                {
+                    tag: 'div',
+                    props: { class: 'card' },
+                    children: [
+                        {
+                            tag: 'h3',
+                            children: ['📊 Интерактивный счётчик']
+                        },
+                        {
+                            tag: 'div',
+                            props: { 
+                                class: 'counter-display',
+                                id: 'counter-display'
+                            },
+                            children: [`Текущее значение: ${appState.counter}`]
+                        },
+                        {
+                            tag: 'div',
+                            children: [
+                                {
+                                    tag: 'button',
+                                    props: { class: 'btn btn-primary' },
+                                    events: { click: incrementCounter },
+                                    children: ['➕ Увеличить']
+                                },
+                                {
+                                    tag: 'button',
+                                    props: { class: 'btn btn-primary' },
+                                    events: { click: decrementCounter },
+                                    children: ['➖ Уменьшить']
+                                },
+                                {
+                                    tag: 'button',
+                                    props: { class: 'btn btn-warning' },
+                                    events: { click: resetCounter },
+                                    children: ['🔄 Сбросить']
+                                }
+                            ]
+                        }
+                    ]
+                },
+                
+                // Список задач
+                {
+                    tag: 'div',
+                    props: { class: 'card' },
+                    children: [
+                        {
+                            tag: 'h3',
+                            children: ['📝 Список задач']
+                        },
+                        {
+                            tag: 'button',
+                            props: { class: 'btn btn-success' },
+                            events: { click: addTodo },
+                            children: ['➕ Добавить задачу']
+                        },
+                        {
+                            tag: 'div',
+                            props: { id: 'todo-list' },
+                            children: []
+                        }
+                    ]
+                },
+                
+                // Форма
+                {
+                    tag: 'div',
+                    props: { class: 'card' },
+                    children: [
+                        {
+                            tag: 'h3',
+                            children: ['📋 Пример формы']
+                        },
+                        {
+                            tag: 'form',
+                            events: { submit: handleFormSubmit },
+                            children: [
+                                {
+                                    tag: 'div',
+                                    props: { class: 'form-group' },
+                                    children: [
+                                        {
+                                            tag: 'label',
+                                            props: { for: 'username' },
+                                            children: ['Имя пользователя:']
+                                        },
+                                        {
+                                            tag: 'input',
+                                            props: {
+                                                type: 'text',
+                                                id: 'username',
+                                                name: 'username',
+                                                placeholder: 'Введите ваше имя',
+                                                required: true
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    tag: 'div',
+                                    props: { class: 'form-group' },
+                                    children: [
+                                        {
+                                            tag: 'label',
+                                            props: { for: 'email' },
+                                            children: ['Email:']
+                                        },
+                                        {
+                                            tag: 'input',
+                                            props: {
+                                                type: 'email',
+                                                id: 'email',
+                                                name: 'email',
+                                                placeholder: 'your@email.com'
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    tag: 'div',
+                                    props: { class: 'form-group' },
+                                    children: [
+                                        {
+                                            tag: 'label',
+                                            props: { for: 'message' },
+                                            children: ['Сообщение:']
+                                        },
+                                        {
+                                            tag: 'textarea',
+                                            props: {
+                                                id: 'message',
+                                                name: 'message',
+                                                rows: 4,
+                                                placeholder: 'Введите ваше сообщение...'
+                                            }
+                                        }
+                                    ]
+                                },
+                                {
+                                    tag: 'button',
+                                    props: { 
+                                        type: 'submit',
+                                        class: 'btn btn-primary'
+                                    },
+                                    children: ['📤 Отправить форму']
+                                }
+                            ]
+                        }
+                    ]
+                },
+                
+                // Статистика
+                {
+                    tag: 'div',
+                    props: { class: 'stats' },
+                    children: [
+                        {
+                            tag: 'h4',
+                            children: ['📈 Статистика']
+                        },
+                        {
+                            tag: 'div',
+                            props: { id: 'stats-content' },
+                            children: ['Загрузка...']
+                        }
+                    ]
+                }
+            ]
+        };
+        
+        // Рендеринг приложения
+        try {
+            console.log('🚀 Инициализация JS Framework...');
+            const app = Framework.render(appConfig, '#app');
+            console.log('✅ Приложение успешно отрендерено!');
+            
+            // Обновляем статистику после рендеринга
+            setTimeout(updateStats, 100);
+            
+            // Добавляем несколько примеров задач
+            appState.todos = [
+                { id: 1, text: 'Изучить JS Framework', completed: false },
+                { id: 2, text: 'Создать тестовое приложение', completed: true },
+                { id: 3, text: 'Написать документацию', completed: false }
+            ];
+            renderTodoList();
+            
+        } catch (error) {
+            console.error('❌ Ошибка при рендеринге приложения:', error);
+            document.getElementById('app').innerHTML = `
+                <div style="color: red; padding: 20px; border: 1px solid red; margin: 20px;">
+                    <h2>Ошибка загрузки приложения</h2>
+                    <p>${error.message}</p>
+                    <p>Проверьте консоль браузера для получения подробной информации.</p>
+                </div>
+            `;
+        }
+    </script>
+</body>
+</html>

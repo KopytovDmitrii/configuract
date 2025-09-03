@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Тест сборки JS Framework</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .success {
+            color: green;
+            padding: 10px;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .error {
+            color: red;
+            padding: 10px;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .test-item {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+            background: #007bff;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Тест сборки JS Framework</h1>
+        <div id="test-results"></div>
+        <div id="demo-app"></div>
+    </div>
+
+    <script src="dist/js-framework.iife.js"></script>
+    <script>
+        function runTests() {
+            const results = [];
+            const resultsContainer = document.getElementById('test-results');
+
+            function addResult(test, success, message) {
+                results.push({ test, success, message });
+                const div = document.createElement('div');
+                div.className = `test-item ${success ? 'success' : 'error'}`;
+                div.innerHTML = `
+                    <strong>${success ? '✅' : '❌'} ${test}</strong><br>
+                    ${message}
+                `;
+                resultsContainer.appendChild(div);
+            }
+
+            try {
+                // Тест 1: Проверка загрузки библиотеки
+                if (typeof window.JSFramework !== 'undefined') {
+                    addResult('Загрузка библиотеки', true, 'JSFramework доступен в глобальной области');
+                } else {
+                    addResult('Загрузка библиотеки', false, 'JSFramework не найден');
+                    return;
+                }
+
+                // Тест 2: Проверка основных классов
+                const { JSFramework, Framework, ConfigValidator, HTMLRenderer } = window.JSFramework;
+                if (JSFramework && Framework && ConfigValidator && HTMLRenderer) {
+                    addResult('Основные классы', true, 'Все основные классы экспортированы');
+                } else {
+                    addResult('Основные классы', false, 'Не все классы доступны');
+                }
+
+                // Тест 3: Создание экземпляра фреймворка
+                try {
+                    const framework = new JSFramework();
+                    addResult('Создание экземпляра', true, 'Экземпляр JSFramework создан успешно');
+                } catch (error) {
+                    addResult('Создание экземпляра', false, `Ошибка: ${error.message}`);
+                }
+
+                // Тест 4: Валидация конфигурации
+                try {
+                    const validator = new ConfigValidator();
+                    const result = validator.validate({ tag: 'div' });
+                    if (result.isValid) {
+                        addResult('Валидация', true, 'Валидация работает корректно');
+                    } else {
+                        addResult('Валидация', false, 'Валидация вернула неожиданный результат');
+                    }
+                } catch (error) {
+                    addResult('Валидация', false, `Ошибка валидации: ${error.message}`);
+                }
+
+                // Тест 5: Простой рендеринг
+                try {
+                    const testConfig = {
+                        tag: 'div',
+                        props: { 
+                            class: 'test-element',
+                            id: 'test-div'
+                        },
+                        children: ['Тестовый элемент']
+                    };
+
+                    const element = Framework.render(testConfig, document.getElementById('demo-app'));
+                    if (element && element.textContent === 'Тестовый элемент') {
+                        addResult('Простой рендеринг', true, 'Элемент отрендерен успешно');
+                    } else {
+                        addResult('Простой рендеринг', false, 'Элемент не отрендерен корректно');
+                    }
+                } catch (error) {
+                    addResult('Простой рендеринг', false, `Ошибка рендеринга: ${error.message}`);
+                }
+
+                // Тест 6: Интерактивный элемент
+                try {
+                    let clicked = false;
+                    const interactiveConfig = {
+                        tag: 'button',
+                        props: { 
+                            class: 'btn',
+                            id: 'test-button'
+                        },
+                        events: {
+                            click: () => {
+                                clicked = true;
+                                addResult('Обработка событий', true, 'События работают корректно');
+                            }
+                        },
+                        children: ['Нажми для теста']
+                    };
+
+                    Framework.render(interactiveConfig, document.getElementById('demo-app'));
+                    
+                    // Симуляция клика
+                    setTimeout(() => {
+                        const button = document.getElementById('test-button');
+                        if (button) {
+                            button.click();
+                        }
+                    }, 100);
+
+                } catch (error) {
+                    addResult('Интерактивные элементы', false, `Ошибка: ${error.message}`);
+                }
+
+                // Тест 7: Статистика
+                try {
+                    const stats = Framework.getStats();
+                    if (stats && typeof stats.elementsCreated === 'number') {
+                        addResult('Статистика', true, `Создано элементов: ${stats.elementsCreated}`);
+                    } else {
+                        addResult('Статистика', false, 'Статистика недоступна');
+                    }
+                } catch (error) {
+                    addResult('Статистика', false, `Ошибка: ${error.message}`);
+                }
+
+                // Итоговый результат
+                const successCount = results.filter(r => r.success).length;
+                const totalTests = results.length;
+                
+                const summary = document.createElement('div');
+                summary.className = successCount === totalTests ? 'success' : 'error';
+                summary.innerHTML = `
+                    <h3>📊 Итоги тестирования</h3>
+                    <p>Пройдено: ${successCount} из ${totalTests} тестов</p>
+                    <p>Процент успеха: ${Math.round((successCount / totalTests) * 100)}%</p>
+                `;
+                resultsContainer.appendChild(summary);
+
+            } catch (error) {
+                addResult('Общий тест', false, `Критическая ошибка: ${error.message}`);
+            }
+        }
+
+        // Запуск тестов после загрузки страницы
+        document.addEventListener('DOMContentLoaded', runTests);
+    </script>
+</body>
+</html>
