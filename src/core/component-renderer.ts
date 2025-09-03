@@ -76,14 +76,19 @@ export class ComponentRenderer {
     const directiveContext: DirectiveContext = {
       state: instance.state,
       props: instance.props,
-      instance
+      instance,
+      computed: instance.computed
     };
 
     // Создаем реактивный эффект для перерендеринга
     effect(() => {
       try {
-        // Получаем конфигурацию от компонента
-        const componentConfig = instance.component.render(instance.props, instance.state);
+        // Получаем конфигурацию от компонента с computed свойствами
+        const componentConfig = instance.component.render(
+          instance.props, 
+          instance.state, 
+          instance.computed
+        );
         
         // Обрабатываем директивы
         const processedConfigs = directiveManager.processDirectives(componentConfig, directiveContext);
@@ -133,7 +138,8 @@ export class ComponentRenderer {
     const directiveContext: DirectiveContext = {
       state: parentInstance?.state || {},
       props: parentInstance?.props || {},
-      instance: parentInstance || undefined
+      instance: parentInstance || undefined,
+      computed: parentInstance?.computed || {}
     };
 
     // Обрабатываем директивы
@@ -234,7 +240,18 @@ export class ComponentRenderer {
    */
   private attachEvents(element: HTMLElement, events: EventHandlers): void {
     for (const [eventType, handler] of Object.entries(events)) {
-      element.addEventListener(eventType, handler);
+      if (!handler) continue; // Пропускаем undefined обработчики
+      
+      // Обрабатываем кастомные события
+      if (eventType === 'mounted' || eventType === 'unmounted') {
+        // Кастомные события - вызываем напрямую
+        if (eventType === 'mounted') {
+          (handler as (element: HTMLElement) => void)(element);
+        }
+        continue;
+      }
+      
+      element.addEventListener(eventType, handler as EventListener);
       this.stats.eventsAttached++;
     }
   }

@@ -26,6 +26,13 @@ class UpdateScheduler {
   }
   
   /**
+   * Планирование обновления (алиас для schedule)
+   */
+  scheduleUpdate(fn: Function): void {
+    this.schedule(fn);
+  }
+  
+  /**
    * Планирование выполнения flush через requestAnimationFrame
    */
   private scheduleFlush(): Promise<void> {

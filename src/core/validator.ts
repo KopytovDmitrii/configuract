@@ -67,13 +67,27 @@ export class ConfigValidator {
   }
 
   /**
-   * Валидация HTML тега
+   * Валидация HTML тега или компонента
    */
   private validateTag(config: ElementConfig, errors: ValidationError[], path: string): void {
+    // Для компонентов поле tag не требуется, проверяем наличие component
+    if (config.component) {
+      // Это компонент - валидируем имя компонента
+      if (typeof config.component !== 'string') {
+        errors.push({
+          field: 'component',
+          message: 'Имя компонента должно быть строкой',
+          path,
+        });
+      }
+      return; // Для компонентов не требуется tag
+    }
+    
+    // Для обычных элементов требуется tag
     if (!config.tag) {
       errors.push({
         field: 'tag',
-        message: 'Поле tag является обязательным',
+        message: 'Поле tag является обязательным для элементов (или укажите component для компонентов)',
         path,
       });
       return;
@@ -244,7 +258,7 @@ export class ConfigValidator {
    * Проверка валидности типа события DOM
    */
   private isValidEventType(eventType: string): boolean {
-    const validEvents = [
+    const validDOMEvents = [
       'click', 'dblclick', 'mousedown', 'mouseup', 'mouseover', 'mouseout',
       'mousemove', 'mouseenter', 'mouseleave',
       'keydown', 'keyup', 'keypress',
@@ -252,7 +266,13 @@ export class ConfigValidator {
       'load', 'unload', 'resize', 'scroll',
       'touchstart', 'touchend', 'touchmove', 'touchcancel'
     ];
-    return validEvents.includes(eventType);
+    
+    // Кастомные события фреймворка
+    const customFrameworkEvents = [
+      'mounted', 'unmounted'
+    ];
+    
+    return validDOMEvents.includes(eventType) || customFrameworkEvents.includes(eventType);
   }
 
   /**

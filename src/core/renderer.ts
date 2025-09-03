@@ -126,13 +126,21 @@ export class HTMLRenderer {
     const listeners: EventListenerRecord[] = [];
 
     for (const [eventType, handler] of Object.entries(events)) {
+      if (!handler) continue; // Пропускаем undefined обработчики
+      
+      // Обрабатываем кастомные события фреймворка
+      if (eventType === 'mounted' || eventType === 'unmounted') {
+        // Кастомные события не добавляются как DOM listeners
+        continue;
+      }
+      
       const listenerRecord: EventListenerRecord = {
         type: eventType,
-        handler,
+        handler: handler as (event: Event) => void,
         element
       };
 
-      element.addEventListener(eventType, handler);
+      element.addEventListener(eventType, handler as EventListener);
       listeners.push(listenerRecord);
       this.stats.eventsAttached++;
     }

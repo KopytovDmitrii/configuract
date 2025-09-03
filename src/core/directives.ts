@@ -11,7 +11,7 @@ abstract class BaseDirective {
 /**
  * Директива условного рендеринга v-if
  */
-export class IfDirective extends BaseDirective {
+class IfDirective extends BaseDirective {
   name = 'if';
 
   process(config: ElementConfig, context: DirectiveContext): ElementConfig | null {
@@ -55,7 +55,7 @@ export class IfDirective extends BaseDirective {
 /**
  * Директива рендеринга списков v-for
  */
-export class ForDirective extends BaseDirective {
+class ForDirective extends BaseDirective {
   name = 'for';
 
   process(config: ElementConfig, context: DirectiveContext): ElementConfig[] {
@@ -191,7 +191,7 @@ export class ForDirective extends BaseDirective {
 /**
  * Директива показа/скрытия элемента v-show
  */
-export class ShowDirective extends BaseDirective {
+class ShowDirective extends BaseDirective {
   name = 'show';
 
   process(config: ElementConfig, context: DirectiveContext): ElementConfig {
@@ -243,9 +243,11 @@ export class ShowDirective extends BaseDirective {
 
 /**
  * Директива двунаправленной привязки данных v-model
+ * Поддерживает все основные типы форм: input, textarea, select
  */
-export class ModelDirective extends BaseDirective {
+class ModelDirective extends BaseDirective {
   name = 'model';
+  private static modelBindings = new Map<HTMLElement, { path: string; context: DirectiveContext }>();
 
   process(config: ElementConfig, context: DirectiveContext): ElementConfig {
     if (!config.model) {
@@ -278,6 +280,21 @@ export class ModelDirective extends BaseDirective {
       default:
         console.warn(`v-model не поддерживается для элемента ${tag}`);
     }
+
+    // Добавляем обработчик для отслеживания элемента после рендеринга
+    const originalMounted = processedConfig.events?.mounted;
+    processedConfig.events = processedConfig.events || {};
+    processedConfig.events.mounted = (element: HTMLElement) => {
+      // Сохраняем привязку для последующих обновлений
+      ModelDirective.modelBindings.set(element, {
+        path: config.model!,
+        context
+      });
+      
+      if (originalMounted) {
+        originalMounted(element);
+      }
+    };
 
     // Удаляем директиву из конфига
     const { model: _, ...cleanConfig } = processedConfig;
@@ -369,25 +386,98 @@ export class ModelDirective extends BaseDirective {
   }
 
   /**
-   * Установка значения свойства по пути
+   * Установка значения свойства по пути с поддержкой реактивности
    */
   private setPropertyValue(path: string, value: any, context: DirectiveContext): void {
     try {
-      // Простая реализация для основных случаев
-      if (path.includes('.')) {
-        const parts = path.split('.');
-        let obj = context.state;
-        
-        for (let i = 0; i < parts.length - 1; i++) {
-          obj = obj[parts[i]];
+      // Поддерживаем различные пути: property, nested.property, array[0].property
+      const pathParts = this.parsePath(path);
+      let obj = context.state;
+      
+      // Навигируемся до последнего объекта
+      for (let i = 0; i < pathParts.length - 1; i++) {
+        const part = pathParts[i];
+        if (part.type === 'property') {
+          obj = obj[part.key];
+        } else if (part.type === 'index') {
+          obj = obj[part.key];
         }
-        
-        obj[parts[parts.length - 1]] = value;
-      } else {
-        context.state[path] = value;
       }
+      
+      // Устанавливаем значение
+      const lastPart = pathParts[pathParts.length - 1];
+      if (lastPart.type === 'property') {
+        obj[lastPart.key] = value;
+      } else if (lastPart.type === 'index') {
+        obj[lastPart.key] = value;
+      }
+      
+      // Запускаем обновление интерфейса через планировщик
+      this.triggerUpdate(context);
+      
     } catch (error) {
       console.warn('Ошибка при установке значения v-model:', path, error);
+    }
+  }
+  
+  /**
+   * Парсинг пути для поддержки сложных выражений
+   */
+  private parsePath(path: string): Array<{ type: 'property' | 'index'; key: string | number }> {
+    const parts: Array<{ type: 'property' | 'index'; key: string | number }> = [];
+    
+    // Упрощенный парсер для основных случаев
+    const segments = path.split('.');
+    
+    for (const segment of segments) {
+      const arrayMatch = segment.match(/^(\w+)\[(\d+)\]$/);
+      if (arrayMatch) {
+        parts.push({ type: 'property', key: arrayMatch[1] });
+        parts.push({ type: 'index', key: parseInt(arrayMatch[2]) });
+      } else {
+        parts.push({ type: 'property', key: segment });
+      }
+    }
+    
+    return parts;
+  }
+  
+  /**
+   * Запуск обновления через планировщик
+   */
+  private triggerUpdate(context: DirectiveContext): void {
+    // Импортируем планировщик динамически чтобы избежать циклических зависимостей
+    import('./scheduler').then(({ scheduler }) => {
+      scheduler.scheduleUpdate(() => {
+        // Обновление будет обработано планировщиком
+      });
+    }).catch(error => {
+      console.warn('Ошибка при запуске обновления:', error);
+    });
+  }
+  
+  /**
+   * Статический метод для обновления всех привязанных элементов
+   */
+  static updateBoundElements(): void {
+    for (const [element, binding] of ModelDirective.modelBindings) {
+      try {
+        const currentValue = new ModelDirective().getPropertyValue(binding.path, binding.context);
+        
+        if (element instanceof HTMLInputElement) {
+          if (element.type === 'checkbox' || element.type === 'radio') {
+            element.checked = element.type === 'checkbox' ? currentValue : (currentValue === element.value);
+          } else {
+            element.value = String(currentValue || '');
+          }
+        } else if (element instanceof HTMLTextAreaElement) {
+          element.value = String(currentValue || '');
+        } else if (element instanceof HTMLSelectElement) {
+          element.value = String(currentValue || '');
+        }
+      } catch (error) {
+        console.warn('Ошибка при обновлении привязанного элемента:', error);
+      }
     }
   }
 }
@@ -458,3 +548,6 @@ export class DirectiveManager {
  * Глобальный экземпляр менеджера директив
  */
 export const directiveManager = new DirectiveManager();
+
+// Экспорт отдельных директив для прямого использования
+export { IfDirective, ForDirective, ShowDirective, ModelDirective };

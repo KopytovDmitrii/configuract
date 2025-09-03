@@ -58,10 +58,29 @@ export interface StyleProperties {
 export type ElementChild = ElementConfig | string;
 
 /**
- * Обработчики событий DOM
+ * Обработчики событий DOM и кастомных событий фреймворка
  */
 export interface EventHandlers {
-  [eventType: string]: (event: Event) => void;
+  // DOM события
+  click?: (event: Event) => void;
+  input?: (event: Event) => void;
+  change?: (event: Event) => void;
+  submit?: (event: Event) => void;
+  keydown?: (event: Event) => void;
+  keyup?: (event: Event) => void;
+  mousedown?: (event: Event) => void;
+  mouseup?: (event: Event) => void;
+  mouseover?: (event: Event) => void;
+  mouseout?: (event: Event) => void;
+  focus?: (event: Event) => void;
+  blur?: (event: Event) => void;
+  
+  // Кастомные события фреймворка
+  mounted?: (element: HTMLElement) => void;
+  unmounted?: (element: HTMLElement) => void;
+  
+  // Любые другие события
+  [eventType: string]: ((event: Event) => void) | ((element: HTMLElement) => void) | undefined;
 }
 
 /**
@@ -137,7 +156,7 @@ export interface RenderStats {
 // ===========================================
 
 /**
- * Определение компонента
+ * Определение компонента с расширенными хуками жизненного цикла
  */
 export interface Component {
   /** Имя компонента */
@@ -146,18 +165,30 @@ export interface Component {
   props?: ComponentProps;
   /** Фабрика локального состояния */
   state?: () => Record<string, any>;
+  /** Computed свойства компонента */
+  computed?: Record<string, () => any>;
+  /** Методы компонента */
+  methods?: Record<string, Function>;
   /** Функция рендеринга */
-  render(props: any, state: any): ElementConfig;
+  render(props: any, state: any, computed?: any): ElementConfig;
   
   // Хуки жизненного цикла
-  /** Вызывается при создании компонента */
-  onCreate?(): void;
+  /** Вызывается при создании экземпляра компонента */
+  beforeCreate?(): void;
+  /** Вызывается после создания экземпляра */
+  created?(): void;
+  /** Вызывается перед монтированием в DOM */
+  beforeMount?(): void;
   /** Вызывается после монтирования в DOM */
-  onMount?(): void;
-  /** Вызывается при обновлении */
-  onUpdate?(changedProps: string[], changedState: string[]): void;
+  mounted?(): void;
+  /** Вызывается перед обновлением */
+  beforeUpdate?(changedProps: string[], changedState: string[]): void;
+  /** Вызывается после обновления */
+  updated?(changedProps: string[], changedState: string[]): void;
   /** Вызывается перед размонтированием */
-  onDestroy?(): void;
+  beforeDestroy?(): void;
+  /** Вызывается после размонтирования */
+  destroyed?(): void;
 }
 
 /**
@@ -182,7 +213,7 @@ export interface PropDefinition {
 }
 
 /**
- * Экземпляр компонента
+ * Экземпляр компонента с расширенной функциональностью
  */
 export interface ComponentInstance {
   /** Уникальный идентификатор */
@@ -193,16 +224,22 @@ export interface ComponentInstance {
   props: any;
   /** Локальное состояние */
   state: any;
+  /** Computed свойства */
+  computed: Record<string, any>;
   /** DOM элемент */
   element: HTMLElement | null;
   /** Смонтирован ли компонент */
   mounted: boolean;
   /** Отслеживаемые зависимости */
   dependencies: Set<string>;
-  /** Родительские компоненты */
+  /** Дочерние компоненты */
   children: ComponentInstance[];
   /** Родительский компонент */
   parent: ComponentInstance | null;
+  /** Контекст плагинов */
+  pluginContext: Record<string, any>;
+  /** Очистка ресурсов */
+  cleanup: (() => void)[];
 }
 
 // ===========================================
@@ -319,6 +356,106 @@ export interface DiffResult {
 }
 
 // ===========================================
+// СИСТЕМА ПЛАГИНОВ
+// ===========================================
+
+/**
+ * Интерфейс плагина для фреймворка
+ */
+export interface Plugin {
+  /** Название плагина */
+  name: string;
+  /** Версия плагина */
+  version?: string;
+  /** Функция установки плагина */
+  install: (framework: any, options?: any) => void;
+  /** Зависимости плагина */
+  dependencies?: string[];
+}
+
+/**
+ * Опции для системы плагинов
+ */
+export interface PluginOptions {
+  [key: string]: any;
+}
+
+/**
+ * Контекст плагина
+ */
+export interface PluginContext {
+  /** Экземпляр фреймворка */
+  framework: any;
+  /** Опции плагина */
+  options: PluginOptions;
+  /** Глобальные свойства */
+  globalProperties: Record<string, any>;
+  /** Пользовательские директивы */
+  directives: Map<string, CustomDirective>;
+}
+
+/**
+ * Пользовательская директива
+ */
+export interface CustomDirective {
+  /** Название директивы */
+  name: string;
+  /** Привязка директивы к элементу */
+  bind?(el: HTMLElement, binding: DirectiveBinding, vnode?: any): void;
+  /** Вставка элемента в DOM */
+  inserted?(el: HTMLElement, binding: DirectiveBinding, vnode?: any): void;
+  /** Обновление директивы */
+  update?(el: HTMLElement, binding: DirectiveBinding, vnode?: any, oldVnode?: any): void;
+  /** Обновление компонента */
+  componentUpdated?(el: HTMLElement, binding: DirectiveBinding, vnode?: any, oldVnode?: any): void;
+  /** Отвязка директивы */
+  unbind?(el: HTMLElement, binding: DirectiveBinding, vnode?: any): void;
+}
+
+/**
+ * Привязка директивы
+ */
+export interface DirectiveBinding {
+  /** Имя директивы */
+  name: string;
+  /** Значение директивы */
+  value: any;
+  /** Предыдущее значение */
+  oldValue: any;
+  /** Выражение в виде строки */
+  expression: string;
+  /** Аргумент директивы */
+  arg?: string;
+  /** Модификаторы */
+  modifiers: Record<string, boolean>;
+}
+
+// ===========================================
+// COMPUTED СВОЙСТВА
+// ===========================================
+
+/**
+ * Интерфейс для computed свойства
+ */
+export interface ComputedRef<T = any> {
+  readonly value: T;
+  readonly dirty: boolean;
+  readonly effect: ReactiveEffect;
+}
+
+/**
+ * Опции для computed свойства
+ */
+export interface ComputedOptions {
+  /** Функция для получения значения */
+  get: () => any;
+  /** Функция для установки значения (опционально) */
+  set?: (value: any) => void;
+  /** Включить отладку */
+  debug?: boolean;
+}
+
+// ===========================================
 // ДИРЕКТИВЫ
 // ===========================================
 
@@ -332,4 +469,6 @@ export interface DirectiveContext {
   props: any;
   /** Экземпляр компонента */
   instance?: ComponentInstance;
+  /** Computed свойства */
+  computed?: Record<string, any>;
 }

@@ -309,3 +309,6 @@ export function shallowReactive<T extends object>(target: T): T {
 export function hasChanged(value: any, oldValue: any): boolean {
   return !Object.is(value, oldValue);
 }
+
+// Экспортируем типы для совместимости
+export type { ReactiveEffect, EffectOptions } from './types';

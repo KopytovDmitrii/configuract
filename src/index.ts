@@ -16,6 +16,26 @@ export {
   enableTracking
 } from './core/reactive';
 
+// Computed свойства
+export {
+  computed,
+  isComputedRef,
+  useComputed,
+  memo,
+  createComponentComputed,
+  computedManager
+} from './core/computed';
+
+// Система плагинов
+export {
+  PluginManager,
+  definePlugin,
+  LifecycleLoggerPlugin,
+  FormValidationPlugin,
+  I18nPlugin,
+  StorePlugin
+} from './core/plugin-system';
+
 // Планировщик
 export { 
   scheduler, 
@@ -33,6 +53,17 @@ export {
   ShowDirective,
   ModelDirective
 } from './core/directives';
+
+// Оптимизация производительности
+export {
+  memoize,
+  debounce,
+  throttle,
+  ComponentOptimizer,
+  DOMOptimizer,
+  MemoryManager,
+  PerformanceAnalyzer
+} from './core/performance';
 
 // DOM Diffing
 export { domDiffer, domPatcher, DOMDiffer, DOMPatcher } from './core/dom-differ';
@@ -70,7 +101,18 @@ export type {
   DiffResult,
   
   // Директивы
-  DirectiveContext
+  DirectiveContext,
+  
+  // Computed свойства
+  ComputedRef,
+  ComputedOptions,
+  
+  // Система плагинов
+  Plugin,
+  PluginOptions,
+  PluginContext,
+  CustomDirective,
+  DirectiveBinding
 } from './core/types';
 
 // Утилиты
@@ -88,25 +130,29 @@ export {
 
 import { ConfigValidator } from './core/validator';
 import { ComponentRenderer } from './core/component-renderer';
-import { ElementConfig, RendererOptions, Component } from './core/types';
+import { ElementConfig, RendererOptions, Component, Plugin, PluginOptions, CustomDirective } from './core/types';
 import { createReactive } from './core/reactive';
 import { registerComponent } from './core/component-registry';
 import { nextTick } from './core/scheduler';
+import { computed } from './core/computed';
+import { PluginManager } from './core/plugin-system';
 
 /**
- * Основной класс JS фреймворка с поддержкой компонентов и реактивности
+ * Основной класс JS фреймворка с поддержкой компонентов, реактивности, плагинов и computed свойств
  */
 export class JSFramework {
   private renderer: ComponentRenderer;
   private validator: ConfigValidator;
   private mountedElement: HTMLElement | null;
   private globalState: any;
+  private pluginManager: PluginManager;
 
   constructor(options?: RendererOptions) {
     this.renderer = new ComponentRenderer();
     this.validator = new ConfigValidator();
     this.mountedElement = null;
     this.globalState = createReactive({});
+    this.pluginManager = new PluginManager(this);
   }
 
   /**
@@ -135,6 +181,44 @@ export class JSFramework {
    */
   nextTick(): Promise<void> {
     return nextTick();
+  }
+
+  /**
+   * Создание computed свойства
+   */
+  computed<T>(getter: () => T): any {
+    return computed(getter);
+  }
+
+  /**
+   * Установка плагина
+   */
+  use(plugin: Plugin, options?: PluginOptions): this {
+    this.pluginManager.use(plugin, options);
+    return this;
+  }
+
+  /**
+   * Регистрация пользовательской директивы
+   */
+  directive(directive: CustomDirective): this {
+    this.pluginManager.registerDirective(directive);
+    return this;
+  }
+
+  /**
+   * Добавление глобального свойства
+   */
+  config(name: string, value: any): this {
+    this.pluginManager.addGlobalProperty(name, value);
+    return this;
+  }
+
+  /**
+   * Получение установленных плагинов
+   */
+  getInstalledPlugins(): string[] {
+    return this.pluginManager.getInstalledPlugins();
   }
 
   /**
@@ -228,12 +312,13 @@ export class JSFramework {
   }
 
   /**
-   * Очистка всех ресурсов фреймворка
+   * Очистка всех ресурсов фреймворка включая плагины
    */
   cleanup(): void {
     this.unmount();
     this.renderer.cleanup();
     this.validator.reset();
+    this.pluginManager.cleanup();
   }
 
   /**

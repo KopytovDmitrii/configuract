@@ -60,7 +60,7 @@ class ComponentRegistry {
   }
 
   /**
-   * Создание экземпляра компонента
+   * Создание экземпляра компонента с полной поддержкой жизненного цикла
    */
   createInstance(componentName: string, props: any = {}): ComponentInstance {
     const component = this.get(componentName);
@@ -74,9 +74,40 @@ class ComponentRegistry {
     // Валидируем и обрабатываем props
     const validatedProps = this.validateAndNormalizeProps(props, component.props);
 
+    // Вызываем хук beforeCreate
+    try {
+      component.beforeCreate?.();
+    } catch (error) {
+      console.error(`Ошибка в хуке beforeCreate компонента "${componentName}":`, error);
+    }
+
     // Создаем локальное состояние
     const localState = component.state ? component.state() : {};
     const reactiveState = createReactive(localState);
+
+    // Создаем computed свойства
+    const computedProperties: Record<string, any> = {};
+    if (component.computed) {
+      for (const [key, getter] of Object.entries(component.computed)) {
+        try {
+          // Создаем простую реализацию computed для прямого вызова
+          Object.defineProperty(computedProperties, key, {
+            get() {
+              return getter.call({ 
+                state: reactiveState, 
+                props: validatedProps,
+                computed: computedProperties
+              });
+            },
+            enumerable: true,
+            configurable: true
+          });
+        } catch (error) {
+          console.warn(`Ошибка при создании computed свойства "${key}":`, error);
+          computedProperties[key] = undefined;
+        }
+      }
+    }
 
     // Создаем экземпляр
     const instance: ComponentInstance = {
@@ -84,21 +115,24 @@ class ComponentRegistry {
       component,
       props: validatedProps,
       state: reactiveState,
+      computed: computedProperties,
       element: null,
       mounted: false,
       dependencies: new Set(),
       children: [],
-      parent: null
+      parent: null,
+      pluginContext: {},
+      cleanup: []
     };
 
     // Сохраняем экземпляр
     this.instances.set(id, instance);
 
-    // Вызываем хук onCreate
+    // Вызываем хук created
     try {
-      component.onCreate?.call(instance);
+      component.created?.call(instance);
     } catch (error) {
-      console.error(`Ошибка в хуке onCreate компонента "${componentName}":`, error);
+      console.error(`Ошибка в хуке created компонента "${componentName}":`, error);
     }
 
     return instance;
@@ -125,11 +159,11 @@ class ComponentRegistry {
       this.unmountInstance(instance);
     }
 
-    // Вызываем хук onDestroy
+    // Вызываем хук destroyed
     try {
-      instance.component.onDestroy?.call(instance);
+      instance.component.destroyed?.call(instance);
     } catch (error) {
-      console.error(`Ошибка в хуке onDestroy компонента "${instance.component.name}":`, error);
+      console.error(`Ошибка в хуке destroyed компонента "${instance.component.name}":`, error);
     }
 
     // Очищаем ссылки
@@ -142,7 +176,7 @@ class ComponentRegistry {
   }
 
   /**
-   * Монтирование экземпляра
+   * Монтирование экземпляра с полным жизненным циклом
    */
   mountInstance(instance: ComponentInstance, element: HTMLElement): void {
     if (instance.mounted) {
@@ -150,23 +184,37 @@ class ComponentRegistry {
       return;
     }
 
+    // Вызываем хук beforeMount
+    try {
+      instance.component.beforeMount?.call(instance);
+    } catch (error) {
+      console.error(`Ошибка в хуке beforeMount компонента "${instance.component.name}":`, error);
+    }
+
     instance.element = element;
     instance.mounted = true;
 
-    // Вызываем хук onMount
+    // Вызываем хук mounted
     try {
-      instance.component.onMount?.call(instance);
+      instance.component.mounted?.call(instance);
     } catch (error) {
-      console.error(`Ошибка в хуке onMount компонента "${instance.component.name}":`, error);
+      console.error(`Ошибка в хуке mounted компонента "${instance.component.name}":`, error);
     }
   }
 
   /**
-   * Размонтирование экземпляра
+   * Размонтирование экземпляра с вызовом хуков
    */
   unmountInstance(instance: ComponentInstance): void {
     if (!instance.mounted) {
       return;
+    }
+
+    // Вызываем хук beforeDestroy
+    try {
+      instance.component.beforeDestroy?.call(instance);
+    } catch (error) {
+      console.error(`Ошибка в хуке beforeDestroy компонента "${instance.component.name}":`, error);
     }
 
     // Размонтируем дочерние компоненты
@@ -174,14 +222,28 @@ class ComponentRegistry {
       this.unmountInstance(child);
     });
 
+    // Очищаем ресурсы
+    instance.cleanup.forEach(cleanupFn => {
+      try {
+        cleanupFn();
+      } catch (error) {
+        console.error('Ошибка при очистке ресурсов:', error);
+      }
+    });
+
     instance.element = null;
     instance.mounted = false;
 
-    // Хук onDestroy будет вызван в destroyInstance
+    // Вызываем хук destroyed
+    try {
+      instance.component.destroyed?.call(instance);
+    } catch (error) {
+      console.error(`Ошибка в хуке destroyed компонента "${instance.component.name}":`, error);
+    }
   }
 
   /**
-   * Обновление props экземпляра
+   * Обновление props экземпляра с хуками жизненного цикла
    */
   updateInstanceProps(instance: ComponentInstance, newProps: any): void {
     const component = instance.component;
@@ -195,16 +257,25 @@ class ComponentRegistry {
       }
     }
 
+    if (changedProps.length === 0) {
+      return; // Ничего не изменилось
+    }
+
+    // Вызываем хук beforeUpdate
+    try {
+      component.beforeUpdate?.call(instance, changedProps, []);
+    } catch (error) {
+      console.error(`Ошибка в хуке beforeUpdate компонента "${component.name}":`, error);
+    }
+
     // Обновляем props
     instance.props = validatedProps;
 
-    // Вызываем хук onUpdate если есть изменения
-    if (changedProps.length > 0) {
-      try {
-        instance.component.onUpdate?.call(instance, changedProps, []);
-      } catch (error) {
-        console.error(`Ошибка в хуке onUpdate компонента "${component.name}":`, error);
-      }
+    // Вызываем хук updated
+    try {
+      component.updated?.call(instance, changedProps, []);
+    } catch (error) {
+      console.error(`Ошибка в хуке updated компонента "${component.name}":`, error);
     }
   }
 
