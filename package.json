@@ -3,6 +3,13 @@
   "version": "1.0.0",
   "description": "Реактивный JS фреймворк для рендеринга HTML",
   "main": "dist/js-framework.iife.js",
+  "module": "dist/js-framework.es.js",
+  "exports": {
+    ".": {
+      "import": "./dist/js-framework.es.js",
+      "require": "./dist/js-framework.iife.js"
+    }
+  },
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc && vite build",
@@ -45,7 +52,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/js-framework/js-framework.git"
+    "url": "git+https://github.com/KopytovDmitrii/configuract.git"
   },
   "bugs": {
     "url": "https://github.com/js-framework/js-framework/issues"

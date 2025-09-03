@@ -4,9 +4,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Сборка
-dist/
-build/
 
 # Кэш и временные файлы
 .cache/

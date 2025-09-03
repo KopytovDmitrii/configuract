@@ -7,7 +7,7 @@ export default defineConfig({
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'JSFramework',
       fileName: (format) => `js-framework.${format}.js`,
-      formats: ['iife']
+      formats: ['es', 'iife']
     },
     rollupOptions: {
       output: {
