@@ -1823,6 +1823,21 @@ class ComponentRenderer {
         case "style":
           this.applyStyles(element, value);
           break;
+        case "checked":
+          if (element instanceof HTMLInputElement) {
+            element.checked = Boolean(value);
+          }
+          break;
+        case "value":
+          if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+            element.value = String(value || "");
+          }
+          break;
+        case "selected":
+          if (element instanceof HTMLOptionElement) {
+            element.selected = Boolean(value);
+          }
+          break;
         default:
           if (value !== void 0 && value !== null) {
             element.setAttribute(key, String(value));
