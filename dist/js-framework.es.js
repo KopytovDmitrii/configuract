@@ -1294,16 +1294,23 @@ class ForDirective extends BaseDirective {
     this.name = "for";
   }
   process(config, context) {
+    console.log("ForDirective.process вызван с config:", config);
+    console.log("ForDirective.process context.state:", context.state);
+    console.log("ForDirective.process context.props:", context.props);
     if (!config.for || !config.template) {
+      console.log("ForDirective: нет config.for или config.template, возвращаем исходный config");
       return [config];
     }
     const { items, itemName, indexName } = this.parseForExpression(config.for);
+    console.log("ForDirective: parsed expression - items:", items, "itemName:", itemName);
     const itemsArray = this.evaluateExpression(items, context);
+    console.log("ForDirective: evaluated items array:", itemsArray);
     if (!Array.isArray(itemsArray)) {
-      console.warn("v-for требует массив:", items);
+      console.warn("v-for требует массив:", items, "got:", itemsArray);
       return [];
     }
-    return itemsArray.map((item, index) => {
+    const result = itemsArray.map((item, index) => {
+      console.log(`ForDirective: обработка элемента ${index}:`, item);
       const itemContext = {
         ...context,
         state: {
@@ -1312,12 +1319,20 @@ class ForDirective extends BaseDirective {
           ...indexName ? { [indexName]: index } : { [`${itemName}Index`]: index }
         }
       };
+      console.log("ForDirective: itemContext.state:", itemContext.state);
       const processedTemplate = this.processTemplate(config.template, itemContext);
-      return {
+      console.log("ForDirective: processedTemplate:", processedTemplate);
+      const keyValue = config.key ? this.processKeyExpression(String(config.key), itemContext) : index;
+      console.log("ForDirective: key value:", keyValue);
+      const resultItem = {
         ...processedTemplate,
-        key: config.key ? this.evaluateExpression(String(config.key), itemContext) : index
+        key: keyValue
       };
+      console.log("ForDirective: result item:", resultItem);
+      return resultItem;
     });
+    console.log("ForDirective: final result array:", result);
+    return result;
   }
   /**
    * Парсинг выражения v-for
@@ -1344,7 +1359,7 @@ class ForDirective extends BaseDirective {
    * Обработка шаблона для элемента списка
    */
   processTemplate(template, context) {
-    const processedTemplate = JSON.parse(JSON.stringify(template));
+    const processedTemplate = this.deepCloneWithFunctions(template);
     if (processedTemplate.children) {
       processedTemplate.children = processedTemplate.children.map((child) => {
         if (typeof child === "string") {
@@ -1357,11 +1372,52 @@ class ForDirective extends BaseDirective {
       Object.keys(processedTemplate.props).forEach((key) => {
         const value = processedTemplate.props[key];
         if (typeof value === "string") {
-          processedTemplate.props[key] = this.interpolateString(value, context);
+          if (value.includes("{{") && value.includes("}}")) {
+            const interpolated = this.interpolateValue(value, context);
+            processedTemplate.props[key] = interpolated;
+          } else {
+            processedTemplate.props[key] = this.interpolateString(value, context);
+          }
         }
       });
     }
     return processedTemplate;
+  }
+  /**
+   * Глубокое клонирование объекта с сохранением функций
+   */
+  deepCloneWithFunctions(obj) {
+    if (obj === null || typeof obj !== "object") {
+      return obj;
+    }
+    if (typeof obj === "function") {
+      return obj;
+    }
+    if (Array.isArray(obj)) {
+      return obj.map((item) => this.deepCloneWithFunctions(item));
+    }
+    const cloned = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        cloned[key] = this.deepCloneWithFunctions(obj[key]);
+      }
+    }
+    return cloned;
+  }
+  /**
+   * Интерполяция значений (включая объекты)
+   */
+  interpolateValue(str, context) {
+    const singleExpressionMatch = str.match(/^\{\{(.+?)\}\}$/);
+    if (singleExpressionMatch) {
+      try {
+        return this.evaluateExpression(singleExpressionMatch[1].trim(), context);
+      } catch (error) {
+        console.warn("Ошибка в интерполяции:", singleExpressionMatch[1], error);
+        return str;
+      }
+    }
+    return this.interpolateString(str, context);
   }
   /**
    * Интерполяция строк с выражениями {{}}
@@ -1376,6 +1432,15 @@ class ForDirective extends BaseDirective {
         return match;
       }
     });
+  }
+  /**
+   * Обработка выражения ключа (поддерживает интерполяцию и прямые выражения)
+   */
+  processKeyExpression(keyExpression, context) {
+    if (keyExpression.includes("{{") && keyExpression.includes("}}")) {
+      return this.interpolateString(keyExpression, context);
+    }
+    return this.evaluateExpression(keyExpression, context);
   }
   /**
    * Оценка выражения
@@ -1740,12 +1805,15 @@ class ComponentRenderer {
           instance.computed
         );
         const processedConfigs = directiveManager.processDirectives(componentConfig, directiveContext);
+        console.log("ComponentRenderer: processedConfigs после директив:", processedConfigs);
         if (processedConfigs.length === 0) {
+          console.log("ComponentRenderer: компонент скрыт директивой");
           if (instance.element) {
             this.unmountComponent(instance);
           }
           return;
         }
+        console.log("ComponentRenderer: рендерим конфиг:", processedConfigs[0]);
         const newElement = this.renderElement(processedConfigs[0], instance);
         if (instance.element) {
           if (instance.element.parentNode) {
@@ -1770,17 +1838,22 @@ class ComponentRenderer {
    * Рендеринг обычного элемента
    */
   renderElement(config, parentInstance) {
+    console.log("ComponentRenderer.renderElement вызван с config:", config);
     const directiveContext = {
       state: parentInstance?.state || {},
       props: parentInstance?.props || {},
       instance: parentInstance || void 0,
       computed: parentInstance?.computed || {}
     };
+    console.log("ComponentRenderer.renderElement directiveContext:", directiveContext);
     const processedConfigs = directiveManager.processDirectives(config, directiveContext);
+    console.log("ComponentRenderer.renderElement processedConfigs:", processedConfigs);
     if (processedConfigs.length === 0) {
+      console.log("ComponentRenderer.renderElement: возвращаем placeholder");
       return this.createPlaceholder();
     }
     const processedConfig = processedConfigs[0];
+    console.log("ComponentRenderer.renderElement используем processedConfig:", processedConfig);
     const element = document.createElement(processedConfig.tag || "div");
     this.stats.elementsCreated++;
     if (processedConfig.props) {
@@ -1798,13 +1871,32 @@ class ComponentRenderer {
    * Рендеринг дочерних элементов
    */
   renderChildren(parent, children, parentInstance) {
-    children.forEach((child) => {
+    children.forEach((child, index) => {
+      console.log(`ComponentRenderer.renderChildren: обрабатываем дочерний элемент ${index}:`, child);
       if (typeof child === "string") {
         const textNode = document.createTextNode(child);
         parent.appendChild(textNode);
       } else if (child && typeof child === "object") {
-        const childElement = this.renderConfig(child, parentInstance);
-        parent.appendChild(childElement);
+        if (directiveManager.hasDirectives(child)) {
+          console.log("ComponentRenderer.renderChildren: элемент содержит директивы");
+          const directiveContext = {
+            state: parentInstance?.state || {},
+            props: parentInstance?.props || {},
+            instance: parentInstance || void 0,
+            computed: parentInstance?.computed || {}
+          };
+          const processedConfigs = directiveManager.processDirectives(child, directiveContext);
+          console.log("ComponentRenderer.renderChildren: processedConfigs:", processedConfigs);
+          processedConfigs.forEach((processedConfig) => {
+            if (processedConfig) {
+              const childElement = this.renderConfig(processedConfig, parentInstance);
+              parent.appendChild(childElement);
+            }
+          });
+        } else {
+          const childElement = this.renderConfig(child, parentInstance);
+          parent.appendChild(childElement);
+        }
       }
     });
   }
