@@ -856,6 +856,733 @@ type Watcher<T> = {
 };
 ```
 
+## Планы тестирования для новых функций
+
+### Тестирование v-model директивы
+
+```typescript
+// src/__tests__/model.test.ts
+describe('ModelDirective', () => {
+  test('двусторонняя привязка для текстового input', () => {
+    const state = reactive({ value: 'начальное значение' });
+    const config: ElementConfig = {
+      tag: 'input',
+      props: { type: 'text' },
+      model: 'state.value'
+    };
+    
+    const element = Framework.render(config, document.body);
+    const input = element as HTMLInputElement;
+    
+    // Проверяем начальное значение
+    expect(input.value).toBe('начальное значение');
+    
+    // Изменяем состояние - должен обновиться input
+    state.value = 'новое значение';
+    expect(input.value).toBe('новое значение');
+    
+    // Изменяем input - должно обновиться состояние
+    input.value = 'введенное значение';
+    input.dispatchEvent(new Event('input'));
+    expect(state.value).toBe('введенное значение');
+  });
+  
+  test('модификаторы .lazy, .number, .trim', () => {
+    const state = reactive({ number: 0, text: '' });
+    
+    // Тест модификатора .number
+    const numberConfig: ElementConfig = {
+      tag: 'input',
+      props: { type: 'text' },
+      model: 'state.number.number'
+    };
+    
+    const numberInput = Framework.render(numberConfig, document.body) as HTMLInputElement;
+    numberInput.value = '123';
+    numberInput.dispatchEvent(new Event('input'));
+    expect(state.number).toBe(123);
+    expect(typeof state.number).toBe('number');
+    
+    // Тест модификатора .trim
+    const trimConfig: ElementConfig = {
+      tag: 'input',
+      props: { type: 'text' },
+      model: 'state.text.trim'
+    };
+    
+    const trimInput = Framework.render(trimConfig, document.body) as HTMLInputElement;
+    trimInput.value = '  пробелы  ';
+    trimInput.dispatchEvent(new Event('input'));
+    expect(state.text).toBe('пробелы');
+  });
+  
+  test('checkbox и radio привязка', () => {
+    const state = reactive({ checked: false, selectedValue: '' });
+    
+    // Checkbox
+    const checkboxConfig: ElementConfig = {
+      tag: 'input',
+      props: { type: 'checkbox' },
+      model: 'state.checked'
+    };
+    
+    const checkbox = Framework.render(checkboxConfig, document.body) as HTMLInputElement;
+    expect(checkbox.checked).toBe(false);
+    
+    state.checked = true;
+    expect(checkbox.checked).toBe(true);
+    
+    // Radio
+    const radioConfig: ElementConfig = {
+      tag: 'input',
+      props: { type: 'radio', value: 'option1' },
+      model: 'state.selectedValue'
+    };
+    
+    const radio = Framework.render(radioConfig, document.body) as HTMLInputElement;
+    radio.checked = true;
+    radio.dispatchEvent(new Event('change'));
+    expect(state.selectedValue).toBe('option1');
+  });
+});
+```
+
+### Тестирование Computed свойств
+
+```typescript
+// src/__tests__/computed.test.ts
+describe('Computed Properties', () => {
+  test('ленивое вычисление и кеширование', () => {
+    const state = reactive({ a: 1, b: 2 });
+    let computeCount = 0;
+    
+    const sum = computed(() => {
+      computeCount++;
+      return state.a + state.b;
+    });
+    
+    // Значение не должно вычисляться до первого обращения
+    expect(computeCount).toBe(0);
+    
+    // Первое обращение - вычисляем
+    expect(sum.value).toBe(3);
+    expect(computeCount).toBe(1);
+    
+    // Повторное обращение - используем кеш
+    expect(sum.value).toBe(3);
+    expect(computeCount).toBe(1);
+    
+    // Изменяем зависимость - пересчитываем
+    state.a = 5;
+    expect(sum.value).toBe(7);
+    expect(computeCount).toBe(2);
+  });
+  
+  test('цепочка зависимостей computed свойств', () => {
+    const state = reactive({ items: [1, 2, 3, 4, 5] });
+    
+    const filtered = computed(() => state.items.filter(x => x > 2));
+    const doubled = computed(() => filtered.value.map(x => x * 2));
+    const sum = computed(() => doubled.value.reduce((a, b) => a + b, 0));
+    
+    expect(sum.value).toBe(24); // (3+4+5)*2 = 24
+    
+    state.items.push(6);
+    expect(sum.value).toBe(36); // (3+4+5+6)*2 = 36
+  });
+  
+  test('производительность больших вычислений', () => {
+    const state = reactive({ numbers: Array.from({length: 10000}, (_, i) => i) });
+    
+    const expensiveComputed = computed(() => {
+      return state.numbers.reduce((sum, n) => sum + Math.sqrt(n), 0);
+    });
+    
+    const start = performance.now();
+    const result1 = expensiveComputed.value;
+    const firstTime = performance.now() - start;
+    
+    const cacheStart = performance.now();
+    const result2 = expensiveComputed.value;
+    const cacheTime = performance.now() - cacheStart;
+    
+    expect(result1).toBe(result2);
+    expect(cacheTime).toBeLessThan(firstTime * 0.1); // Кеш должен быть в 10 раз быстрее
+  });
+});
+```
+
+### Тестирование системы плагинов
+
+```typescript
+// src/__tests__/plugin-system.test.ts
+describe('Plugin System', () => {
+  test('установка и использование плагина', () => {
+    const framework = new JSFramework();
+    let pluginInstalled = false;
+    
+    const testPlugin: Plugin = {
+      name: 'TestPlugin',
+      version: '1.0.0',
+      install(app) {
+        pluginInstalled = true;
+        app.globalProperties.set('$test', 'test value');
+        app.globalMethods.set('testMethod', () => 'test result');
+      }
+    };
+    
+    framework.use(testPlugin);
+    
+    expect(pluginInstalled).toBe(true);
+    expect(framework.globalProperties.get('$test')).toBe('test value');
+    expect(framework.globalMethods.get('testMethod')()).toBe('test result');
+  });
+  
+  test('lifecycle hooks плагинов', () => {
+    const framework = new JSFramework();
+    const hookCalls: string[] = [];
+    
+    const lifecyclePlugin: Plugin = {
+      name: 'LifecyclePlugin',
+      version: '1.0.0',
+      install(app) {
+        app.mixin({
+          created() { hookCalls.push('created'); },
+          mounted() { hookCalls.push('mounted'); },
+          updated() { hookCalls.push('updated'); },
+          destroyed() { hookCalls.push('destroyed'); }
+        });
+      }
+    };
+    
+    framework.use(lifecyclePlugin);
+    
+    // Создаем и монтируем компонент
+    const testComponent: Component = {
+      name: 'TestComponent',
+      render: () => ({ tag: 'div', children: ['test'] })
+    };
+    
+    framework.registerComponent(testComponent);
+    const element = framework.render({ component: 'TestComponent' }, document.body);
+    
+    expect(hookCalls).toContain('created');
+    expect(hookCalls).toContain('mounted');
+    
+    framework.unmount();
+    expect(hookCalls).toContain('destroyed');
+  });
+  
+  test('зависимости между плагинами', () => {
+    const framework = new JSFramework();
+    
+    const basePlugin: Plugin = {
+      name: 'BasePlugin',
+      version: '1.0.0',
+      install(app) {
+        app.globalProperties.set('base', true);
+      }
+    };
+    
+    const dependentPlugin: Plugin = {
+      name: 'DependentPlugin',
+      version: '1.0.0',
+      dependencies: ['BasePlugin'],
+      install(app) {
+        app.globalProperties.set('dependent', true);
+      }
+    };
+    
+    framework.use(basePlugin);
+    
+    expect(() => framework.use(dependentPlugin)).not.toThrow();
+    
+    // Тест ошибки при отсутствии зависимости
+    const framework2 = new JSFramework();
+    expect(() => framework2.use(dependentPlugin)).toThrow('требует BasePlugin');
+  });
+});
+```
+
+### Тестирование производительности
+
+```typescript
+// src/__tests__/performance.test.ts
+describe('Performance Tests', () => {
+  test('рендеринг 1000 элементов за <100ms', () => {
+    const config: ElementConfig = {
+      tag: 'div',
+      children: Array.from({length: 1000}, (_, i) => ({
+        tag: 'div',
+        props: { id: `item-${i}` },
+        children: [`Элемент ${i}`]
+      }))
+    };
+    
+    const start = performance.now();
+    const element = Framework.render(config, document.body);
+    const renderTime = performance.now() - start;
+    
+    expect(renderTime).toBeLessThan(100);
+    expect(element.children.length).toBe(1000);
+  });
+  
+  test('обновление состояния за <16ms', () => {
+    const state = reactive({ counter: 0 });
+    const config: ElementConfig = {
+      tag: 'div',
+      children: [`Счетчик: ${state.counter}`]
+    };
+    
+    Framework.render(config, document.body);
+    
+    const start = performance.now();
+    state.counter = 100;
+    const updateTime = performance.now() - start;
+    
+    expect(updateTime).toBeLessThan(16);
+  });
+  
+  test('мемоизация предотвращает ненужные рендеры', () => {
+    let renderCount = 0;
+    
+    const MemoizedComponent = memo({
+      name: 'MemoizedComponent',
+      render(props) {
+        renderCount++;
+        return {
+          tag: 'div',
+          children: [props.text]
+        };
+      }
+    });
+    
+    const state = reactive({ text: 'test', other: 'value' });
+    
+    Framework.registerComponent(MemoizedComponent);
+    Framework.render({
+      component: 'MemoizedComponent',
+      props: { text: state.text }
+    }, document.body);
+    
+    expect(renderCount).toBe(1);
+    
+    // Изменяем несвязанное свойство - рендер не должен произойти
+    state.other = 'new value';
+    expect(renderCount).toBe(1);
+    
+    // Изменяем связанное свойство - должен произойти рендер
+    state.text = 'new text';
+    expect(renderCount).toBe(2);
+  });
+});
+```
+
+## Метрики качества и покрытия
+
+### Целевые показатели покрытия тестами
+
+```typescript
+// jest.config.js - обновленная конфигурация
+module.exports = {
+  preset: 'ts-jest',
+  testEnvironment: 'jsdom',
+  collectCoverage: true,
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text', 'lcov', 'html'],
+  coverageThreshold: {
+    global: {
+      branches: 90,
+      functions: 95,
+      lines: 95,
+      statements: 95
+    },
+    // Критические модули
+    './src/core/': {
+      branches: 95,
+      functions: 98,
+      lines: 98,
+      statements: 98
+    },
+    // Новые функции Sprint 3
+    './src/core/computed.ts': {
+      branches: 95,
+      functions: 100,
+      lines: 98,
+      statements: 98
+    },
+    './src/core/plugin-system.ts': {
+      branches: 90,
+      functions: 95,
+      lines: 95,
+      statements: 95
+    },
+    './src/core/directives/model.ts': {
+      branches: 92,
+      functions: 96,
+      lines: 96,
+      statements: 96
+    }
+  },
+  testMatch: [
+    '**/__tests__/**/*.test.ts',
+    '**/?(*.)+(spec|test).ts'
+  ],
+  setupFilesAfterEnv: ['<rootDir>/src/__tests__/setup.ts']
+};
+```
+
+### Автоматизированная проверка качества
+
+```json
+// package.json - дополнительные скрипты
+{
+  "scripts": {
+    "test:unit": "jest --selectProjects unit",
+    "test:integration": "jest --selectProjects integration",
+    "test:performance": "jest --selectProjects performance",
+    "test:coverage": "jest --coverage",
+    "test:coverage:watch": "jest --coverage --watch",
+    "test:ci": "jest --coverage --ci --watchAll=false",
+    "quality:check": "npm run lint && npm run typecheck && npm run test:coverage",
+    "quality:fix": "npm run lint:fix && npm run format",
+    "performance:profile": "node scripts/performance-profile.js",
+    "bundle:analyze": "npx vite-bundle-analyzer dist/js-framework.iife.js"
+  }
+}
+```
+
+### Мониторинг производительности
+
+```typescript
+// scripts/performance-profile.js
+const { performance } = require('perf_hooks');
+const { JSDOM } = require('jsdom');
+
+// Настройка окружения
+const dom = new JSDOM('<!DOCTYPE html><html><body></body></html>');
+global.document = dom.window.document;
+global.window = dom.window;
+
+// Импорт фреймворка
+const { Framework, reactive, computed, memo } = require('../dist/js-framework.iife.js');
+
+// Тесты производительности
+const performanceTests = {
+  // Тест рендеринга большого списка
+  massiveRender: () => {
+    const config = {
+      tag: 'div',
+      children: Array.from({length: 10000}, (_, i) => ({
+        tag: 'div',
+        props: { class: 'item', id: `item-${i}` },
+        children: [`Элемент номер ${i}`]
+      }))
+    };
+    
+    const start = performance.now();
+    const element = Framework.render(config, document.body);
+    const time = performance.now() - start;
+    
+    return {
+      test: 'massiveRender',
+      elements: 10000,
+      time: time,
+      passed: time < 200,
+      target: '< 200ms'
+    };
+  },
+  
+  // Тест реактивных обновлений
+  reactiveUpdates: () => {
+    const state = reactive({ counter: 0 });
+    const config = {
+      tag: 'div',
+      children: [`Счетчик: ${state.counter}`]
+    };
+    
+    Framework.render(config, document.body);
+    
+    const start = performance.now();
+    for (let i = 0; i < 1000; i++) {
+      state.counter = i;
+    }
+    const time = performance.now() - start;
+    
+    return {
+      test: 'reactiveUpdates',
+      updates: 1000,
+      time: time,
+      passed: time < 50,
+      target: '< 50ms'
+    };
+  },
+  
+  // Тест computed свойств
+  computedPerformance: () => {
+    const state = reactive({ numbers: Array.from({length: 1000}, (_, i) => i) });
+    
+    const expensiveComputed = computed(() => {
+      return state.numbers.reduce((sum, n) => sum + Math.sqrt(n), 0);
+    });
+    
+    // Первое вычисление
+    const start1 = performance.now();
+    const result1 = expensiveComputed.value;
+    const firstTime = performance.now() - start1;
+    
+    // Кешированное обращение
+    const start2 = performance.now();
+    const result2 = expensiveComputed.value;
+    const cacheTime = performance.now() - start2;
+    
+    return {
+      test: 'computedPerformance',
+      firstTime: firstTime,
+      cacheTime: cacheTime,
+      speedup: firstTime / cacheTime,
+      passed: cacheTime < firstTime * 0.1,
+      target: 'кеш в 10 раз быстрее'
+    };
+  }
+};
+
+// Запуск тестов
+console.log('🚀 Запуск тестов производительности...');
+console.log('='.repeat(50));
+
+const results = [];
+for (const [name, test] of Object.entries(performanceTests)) {
+  try {
+    const result = test();
+    results.push(result);
+    
+    const status = result.passed ? '✅ PASSED' : '❌ FAILED';
+    console.log(`${status} ${result.test}`);
+    console.log(`   Время: ${result.time?.toFixed(2)}ms (цель: ${result.target})`);
+    if (result.elements) console.log(`   Элементы: ${result.elements}`);
+    if (result.updates) console.log(`   Обновления: ${result.updates}`);
+    if (result.speedup) console.log(`   Ускорение: ${result.speedup.toFixed(1)}x`);
+    console.log('');
+  } catch (error) {
+    console.error(`❌ ОШИБКА в ${name}:`, error.message);
+    results.push({ test: name, passed: false, error: error.message });
+  }
+}
+
+// Итоговый отчет
+const passed = results.filter(r => r.passed).length;
+const total = results.length;
+
+console.log('='.repeat(50));
+console.log(`📊 Результаты: ${passed}/${total} тестов прошли`);
+
+if (passed === total) {
+  console.log('🎉 Все тесты производительности прошли!');
+  process.exit(0);
+} else {
+  console.log('⚠️  Некоторые тесты производительности не прошли');
+  process.exit(1);
+}
+```
+
+## Интеграция и сборка
+
+### Обновленная конфигурация сборки
+
+```typescript
+// vite.config.ts - обновленная конфигурация
+import { defineConfig } from 'vite';
+import { resolve } from 'path';
+
+export default defineConfig({
+  build: {
+    lib: {
+      entry: resolve(__dirname, 'src/index.ts'),
+      name: 'JSFramework',
+      fileName: 'js-framework',
+      formats: ['iife', 'es', 'cjs']
+    },
+    rollupOptions: {
+      output: {
+        // Оптимизация для production
+        manualChunks: undefined,
+        inlineDynamicImports: true
+      }
+    },
+    target: 'es2020',
+    minify: 'terser',
+    terserOptions: {
+      compress: {
+        drop_console: true, // Убираем console.log в production
+        drop_debugger: true,
+        pure_funcs: ['console.log', 'console.info', 'console.debug']
+      },
+      mangle: {
+        properties: {
+          regex: /^_/  // Минификация приватных свойств
+        }
+      }
+    },
+    reportCompressedSize: true,
+    chunkSizeWarningLimit: 50 // Предупреждение при превышении 50KB
+  },
+  define: {
+    __DEV__: process.env.NODE_ENV !== 'production',
+    __VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0')
+  },
+  esbuild: {
+    pure: ['console.log'], // Убираем console.log при сборке
+    legalComments: 'none'
+  }
+});
+```
+
+### CI/CD Pipeline
+
+```yaml
+# .github/workflows/ci.yml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x]
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Run linting
+      run: npm run lint
+    
+    - name: Run type checking
+      run: npm run typecheck
+    
+    - name: Run tests
+      run: npm run test:ci
+    
+    - name: Run performance tests
+      run: npm run performance:profile
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage/lcov.info
+        flags: unittests
+        name: codecov-umbrella
+    
+  build:
+    runs-on: ubuntu-latest
+    needs: test
+    
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '20.x'
+        cache: 'npm'
+    
+    - name: Install dependencies
+      run: npm ci
+    
+    - name: Build framework
+      run: npm run build
+    
+    - name: Analyze bundle size
+      run: npm run bundle:analyze
+    
+    - name: Test built framework
+      run: |
+        cd demo-app
+        npm install
+        npm test
+    
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: dist/
+```
+
+### Скрипт подготовки релиза
+
+```bash
+#!/bin/bash
+# scripts/prepare-release.sh
+
+set -e
+
+echo "🚀 Подготовка релиза JS Framework v1.0.0"
+echo "======================================"
+
+# 1. Проверка качества кода
+echo "📋 Проверка качества кода..."
+npm run quality:check
+
+# 2. Запуск всех тестов
+echo "🧪 Запуск всех тестов..."
+npm run test:ci
+
+# 3. Тесты производительности
+echo "⚡ Тестирование производительности..."
+npm run performance:profile
+
+# 4. Сборка фреймворка
+echo "🔨 Сборка фреймворка..."
+npm run build:clean
+
+# 5. Проверка размера bundle
+echo "📦 Анализ размера bundle..."
+npm run bundle:analyze
+
+# 6. Очистка отладочных файлов
+echo "🧹 Очистка отладочных файлов..."
+npm run clean
+
+# 7. Создание демо-приложения
+echo "🎨 Подготовка демо-приложения..."
+cp dist/js-framework.iife.js demo-app/framework.js
+cd demo-app
+npm install
+npm test
+cd ..
+
+# 8. Генерация документации
+echo "📚 Генерация документации..."
+npm run docs:build
+
+# 9. Финальная проверка
+echo "✅ Финальная проверка..."
+node scripts/release-check.js
+
+echo "🎉 Релиз готов к публикации!"
+echo "Следующие шаги:"
+echo "  1. git tag v1.0.0"
+echo "  2. git push origin v1.0.0"
+echo "  3. npm publish"
+echo "  4. Создать GitHub Release"
+```
+
 ## Примеры приложений
 
 ### Многокомпонентная архитектура
