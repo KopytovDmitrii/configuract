@@ -59,19 +59,29 @@ class ForDirective extends BaseDirective {
   name = 'for';
 
   process(config: ElementConfig, context: DirectiveContext): ElementConfig[] {
+    console.log('ForDirective.process вызван с config:', config);
+    console.log('ForDirective.process context.state:', context.state);
+    console.log('ForDirective.process context.props:', context.props);
+    
     if (!config.for || !config.template) {
+      console.log('ForDirective: нет config.for или config.template, возвращаем исходный config');
       return [config];
     }
 
     const { items, itemName, indexName } = this.parseForExpression(config.for);
+    console.log('ForDirective: parsed expression - items:', items, 'itemName:', itemName);
+    
     const itemsArray = this.evaluateExpression(items, context);
+    console.log('ForDirective: evaluated items array:', itemsArray);
 
     if (!Array.isArray(itemsArray)) {
-      console.warn('v-for требует массив:', items);
+      console.warn('v-for требует массив:', items, 'got:', itemsArray);
       return [];
     }
 
-    return itemsArray.map((item, index) => {
+    const result = itemsArray.map((item, index) => {
+      console.log(`ForDirective: обработка элемента ${index}:`, item);
+      
       const itemContext: DirectiveContext = {
         ...context,
         state: {
@@ -80,17 +90,30 @@ class ForDirective extends BaseDirective {
           ...(indexName ? { [indexName]: index } : { [`${itemName}Index`]: index })
         }
       };
+      
+      console.log('ForDirective: itemContext.state:', itemContext.state);
 
       // Обрабатываем шаблон для каждого элемента
       const processedTemplate = this.processTemplate(config.template!, itemContext);
+      console.log('ForDirective: processedTemplate:', processedTemplate);
       
-      return {
+      const keyValue = config.key 
+        ? this.processKeyExpression(String(config.key), itemContext)
+        : index;
+      
+      console.log('ForDirective: key value:', keyValue);
+      
+      const resultItem = {
         ...processedTemplate,
-        key: config.key 
-          ? this.evaluateExpression(String(config.key), itemContext) 
-          : index
+        key: keyValue
       };
+      
+      console.log('ForDirective: result item:', resultItem);
+      return resultItem;
     });
+    
+    console.log('ForDirective: final result array:', result);
+    return result;
   }
 
   /**
@@ -126,8 +149,8 @@ class ForDirective extends BaseDirective {
    * Обработка шаблона для элемента списка
    */
   private processTemplate(template: ElementConfig, context: DirectiveContext): ElementConfig {
-    // Рекурсивно обрабатываем шаблон, заменяя выражения
-    const processedTemplate = JSON.parse(JSON.stringify(template));
+    // Глубокое клонирование с сохранением функций
+    const processedTemplate = this.deepCloneWithFunctions(template);
     
     // Обрабатываем содержимое (дочерние элементы)
     if (processedTemplate.children) {
@@ -144,12 +167,64 @@ class ForDirective extends BaseDirective {
       Object.keys(processedTemplate.props).forEach(key => {
         const value = processedTemplate.props[key];
         if (typeof value === 'string') {
-          processedTemplate.props[key] = this.interpolateString(value, context);
+          // Специальная обработка для интерполяции объектов
+          if (value.includes('{{') && value.includes('}}')) {
+            const interpolated = this.interpolateValue(value, context);
+            processedTemplate.props[key] = interpolated;
+          } else {
+            processedTemplate.props[key] = this.interpolateString(value, context);
+          }
         }
+        // Функции остаются как есть
       });
     }
 
     return processedTemplate;
+  }
+
+  /**
+   * Глубокое клонирование объекта с сохранением функций
+   */
+  private deepCloneWithFunctions(obj: any): any {
+    if (obj === null || typeof obj !== 'object') {
+      return obj;
+    }
+
+    if (typeof obj === 'function') {
+      return obj; // Возвращаем функцию как есть
+    }
+
+    if (Array.isArray(obj)) {
+      return obj.map(item => this.deepCloneWithFunctions(item));
+    }
+
+    const cloned: any = {};
+    for (const key in obj) {
+      if (obj.hasOwnProperty(key)) {
+        cloned[key] = this.deepCloneWithFunctions(obj[key]);
+      }
+    }
+
+    return cloned;
+  }
+
+  /**
+   * Интерполяция значений (включая объекты)
+   */
+  private interpolateValue(str: string, context: DirectiveContext): any {
+    // Проверяем, есть ли только одно выражение в строке
+    const singleExpressionMatch = str.match(/^\{\{(.+?)\}\}$/);
+    if (singleExpressionMatch) {
+      // Возвращаем значение как есть (объект, число, строка и т.д.)
+      try {
+        return this.evaluateExpression(singleExpressionMatch[1].trim(), context);
+      } catch (error) {
+        console.warn('Ошибка в интерполяции:', singleExpressionMatch[1], error);
+        return str;
+      }
+    }
+    // Если несколько выражений - используем строковую интерполяцию
+    return this.interpolateString(str, context);
   }
 
   /**
@@ -165,6 +240,18 @@ class ForDirective extends BaseDirective {
         return match;
       }
     });
+  }
+
+  /**
+   * Обработка выражения ключа (поддерживает интерполяцию и прямые выражения)
+   */
+  private processKeyExpression(keyExpression: string, context: DirectiveContext): any {
+    // Если выражение содержит интерполяцию {{}}, обрабатываем как строку
+    if (keyExpression.includes('{{') && keyExpression.includes('}}')) {
+      return this.interpolateString(keyExpression, context);
+    }
+    // Иначе обрабатываем как JavaScript выражение
+    return this.evaluateExpression(keyExpression, context);
   }
 
   /**

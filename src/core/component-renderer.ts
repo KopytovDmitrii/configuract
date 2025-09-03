@@ -93,8 +93,10 @@ export class ComponentRenderer {
         
         // Обрабатываем директивы
         const processedConfigs = directiveManager.processDirectives(componentConfig, directiveContext);
+        console.log('ComponentRenderer: processedConfigs после директив:', processedConfigs);
         
         if (processedConfigs.length === 0) {
+          console.log('ComponentRenderer: компонент скрыт директивой');
           // Компонент скрыт директивой
           if (instance.element) {
             this.unmountComponent(instance);
@@ -102,6 +104,7 @@ export class ComponentRenderer {
           return;
         }
 
+        console.log('ComponentRenderer: рендерим конфиг:', processedConfigs[0]);
         // Рендерим первый результат (в большинстве случаев будет только один)
         const newElement = this.renderElement(processedConfigs[0], instance);
         
@@ -135,6 +138,8 @@ export class ComponentRenderer {
    * Рендеринг обычного элемента
    */
   private renderElement(config: ElementConfig, parentInstance?: ComponentInstance): HTMLElement {
+    console.log('ComponentRenderer.renderElement вызван с config:', config);
+    
     // Создаем контекст для директив
     const directiveContext: DirectiveContext = {
       state: parentInstance?.state || {},
@@ -142,16 +147,21 @@ export class ComponentRenderer {
       instance: parentInstance || undefined,
       computed: parentInstance?.computed || {}
     };
+    
+    console.log('ComponentRenderer.renderElement directiveContext:', directiveContext);
 
     // Обрабатываем директивы
     const processedConfigs = directiveManager.processDirectives(config, directiveContext);
+    console.log('ComponentRenderer.renderElement processedConfigs:', processedConfigs);
     
     if (processedConfigs.length === 0) {
+      console.log('ComponentRenderer.renderElement: возвращаем placeholder');
       return this.createPlaceholder();
     }
 
     // Для простоты берем первый результат
     const processedConfig = processedConfigs[0];
+    console.log('ComponentRenderer.renderElement используем processedConfig:', processedConfig);
     
     // Создаем HTML элемент
     const element = document.createElement(processedConfig.tag || 'div');
@@ -183,15 +193,42 @@ export class ComponentRenderer {
     children: any[], 
     parentInstance?: ComponentInstance
   ): void {
-    children.forEach(child => {
+    children.forEach((child, index) => {
+      console.log(`ComponentRenderer.renderChildren: обрабатываем дочерний элемент ${index}:`, child);
+      
       if (typeof child === 'string') {
         // Текстовый узел
         const textNode = document.createTextNode(child);
         parent.appendChild(textNode);
       } else if (child && typeof child === 'object') {
-        // Вложенный элемент или компонент
-        const childElement = this.renderConfig(child, parentInstance);
-        parent.appendChild(childElement);
+        // Проверяем, есть ли директивы в дочернем элементе
+        if (directiveManager.hasDirectives(child)) {
+          console.log('ComponentRenderer.renderChildren: элемент содержит директивы');
+          
+          // Создаем контекст для директив
+          const directiveContext: DirectiveContext = {
+            state: parentInstance?.state || {},
+            props: parentInstance?.props || {},
+            instance: parentInstance || undefined,
+            computed: parentInstance?.computed || {}
+          };
+          
+          // Обрабатываем директивы
+          const processedConfigs = directiveManager.processDirectives(child, directiveContext);
+          console.log('ComponentRenderer.renderChildren: processedConfigs:', processedConfigs);
+          
+          // Рендерим все результаты (важно для v-for)
+          processedConfigs.forEach(processedConfig => {
+            if (processedConfig) {
+              const childElement = this.renderConfig(processedConfig, parentInstance);
+              parent.appendChild(childElement);
+            }
+          });
+        } else {
+          // Обычный элемент или компонент без директив
+          const childElement = this.renderConfig(child, parentInstance);
+          parent.appendChild(childElement);
+        }
       }
     });
   }
