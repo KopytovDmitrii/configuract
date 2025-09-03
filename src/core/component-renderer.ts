@@ -84,7 +84,8 @@ export class ComponentRenderer {
     effect(() => {
       try {
         // Получаем конфигурацию от компонента с computed свойствами
-        const componentConfig = instance.component.render(
+        const componentConfig = instance.component.render.call(
+          instance,
           instance.props, 
           instance.state, 
           instance.computed

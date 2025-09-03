@@ -1733,7 +1733,8 @@ class ComponentRenderer {
     };
     effect(() => {
       try {
-        const componentConfig = instance.component.render(
+        const componentConfig = instance.component.render.call(
+          instance,
           instance.props,
           instance.state,
           instance.computed
