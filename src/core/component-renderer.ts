@@ -211,6 +211,24 @@ export class ComponentRenderer {
         case 'style':
           this.applyStyles(element, value as any);
           break;
+        case 'checked':
+          // Для чекбоксов используем DOM-свойство, а не атрибут
+          if (element instanceof HTMLInputElement) {
+            element.checked = Boolean(value);
+          }
+          break;
+        case 'value':
+          // Для input элементов используем DOM-свойство
+          if (element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement) {
+            element.value = String(value || '');
+          }
+          break;
+        case 'selected':
+          // Для option элементов
+          if (element instanceof HTMLOptionElement) {
+            element.selected = Boolean(value);
+          }
+          break;
         default:
           if (value !== undefined && value !== null) {
             element.setAttribute(key, String(value));
